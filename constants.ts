@@ -14,7 +14,7 @@ export const BIKES: Record<string, { dataUrl: string; imageUrl: string }> = {
   "Turbo Levo SL Comp (2024)": {
     dataUrl: "https://dc.tradeinn.com/141212702",
     imageUrl:
-      "https://www.tradeinn.com/m/14121/141212702_2/specialized-%D0%93%D0%BE%D1%80%D0%BD%D1%8B%D0%B9-%D0%B2%D0%B5%D0%BB%D0%BE%D1%81%D0%B8%D0%BF%D0%B5%D0%B4-levo-sl-comp-29-27.5-gx-eagle-2024.webp",
+      "https://www.tradeinn.com/f/14121/141212702_2/specialized-%D0%93%D0%BE%D1%80%D0%BD%D1%8B%D0%B9-%D0%B2%D0%B5%D0%BB%D0%BE%D1%81%D0%B8%D0%BF%D0%B5%D0%B4-levo-sl-comp-29-27.5-gx-eagle-2024.webp",
   },
   "Turbo Levo SL Expert (2024)": {
     dataUrl: "https://dc.tradeinn.com/140851839",
@@ -30,24 +30,27 @@ export const BIKES: Record<string, { dataUrl: string; imageUrl: string }> = {
 
 export type BikeKey = keyof typeof BIKES;
 
-export const ExtraButtons: Record<string, (isSubscribed: boolean) => boolean> ={
+export const ExtraButtons: Record<
+  string,
+  (isSubscribed: boolean, isAdminChat: boolean) => boolean
+> = {
   "Можно заказать?🥺": () => true,
   "Подписаться на изменения цены": (isSubscribed) => !isSubscribed,
   "Прекратить подписку": (isSubscribed) => isSubscribed,
-  "Debug": () => true,
-} as const
+  "Debug": (_, isAdminChat) => isAdminChat,
+} as const;
 
 export type ExtraButtonsKey = keyof typeof ExtraButtons;
 
-export const DebugButtons ={
-  "Список подписчиков": 'europe',
-  "Тест уведомления": 'subscription-test',
-  "Exit debug": 'exit-debug',
-} as const
+export const DebugButtons = {
+  "Список подписчиков": "europe",
+  "Тест уведомления": "subscription-test",
+  "Exit debug": "exit-debug",
+} as const;
 
 export type DebugButtonsKey = keyof typeof DebugButtons;
 
 export const KVPrefix = {
   NOTIFY_SUBSCRIPTION: "NOTIFY_SUBSCRIPTION",
   PRICE: "PRICE",
-} as const
+} as const;

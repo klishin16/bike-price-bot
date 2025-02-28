@@ -15,6 +15,7 @@ const TOKEN = Deno.env.get("BOT_TOKEN");
 if (!TOKEN) {
   throw new Error("Bot token doesn't exist");
 }
+const ADMIN_CHAT_ID = parseInt(Deno.env.get("ADMIN_CHAT_ID") ?? '0');
 
 /** DB */
 const kv = await Deno.openKv();
@@ -57,10 +58,11 @@ const getInfo = async (
 const getKeyboard = async (chatId: number) => {
   const isSubscribed = await kv.get([KVPrefix.NOTIFY_SUBSCRIPTION, chatId])
     .then((res) => !!res.value);
+  const isAdminChat = chatId === ADMIN_CHAT_ID;
 
   const extraButtons = Object.entries(ExtraButtons).reduce<string[]>(
     (buttons, [button, fn]) => {
-      if (fn(isSubscribed)) {
+      if (fn(isSubscribed, isAdminChat)) {
         buttons.push(button);
       }
 
@@ -94,7 +96,13 @@ const updatePrice = async () => {
   const prevPrice = await kv.get([KVPrefix.PRICE, bikeKey]).then((res) =>
     res.value
   );
-  if (prevPrice && currentPrice !== prevPrice) {
+
+  if (!prevPrice) {
+    await kv.set([KVPrefix.PRICE, bikeKey], currentPrice);
+    return
+  }
+
+  if (currentPrice !== prevPrice) {
     await kv.set([KVPrefix.PRICE, bikeKey], currentPrice);
     await notifySubscribers(currentPrice);
   }
