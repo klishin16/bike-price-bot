@@ -1,15 +1,27 @@
-import { Telegraf, Markup } from "npm:telegraf";
-import { BIKES } from "./constants.ts";
+import { Markup, Telegraf } from "npm:telegraf";
+import {
+  BIKES,
+  DebugButtons,
+  DebugButtonsKeys,
+  ExtraButtons,
+  ExtraButtonsKeys,
+  PRICE_KEY,
+} from "./constants.ts";
+import { splitIntoPairs } from "./utils.ts";
 
 const TOKEN = Deno.env.get("BOT_TOKEN");
 if (!TOKEN) {
   throw new Error("Bot token doesn't exist");
 }
 
-const PRICE_KEY = "precio_win_164";
+/** DB */
+const kv = await Deno.openKv();
 
-Deno.serve({ port: 3000 }, (_req) => {
-  return new Response("Ok");
+/** HTTP server */
+Deno.serve({ port: 3000 }, async (_req) => {
+  await notifySubscribers();
+
+  return new Response("ok");
 });
 
 const bot = new Telegraf(TOKEN);
@@ -38,26 +50,124 @@ const getInfo = async (url: string) => {
   }
 };
 
+const getKeyboard = async (chatId: number) => {
+  const isSubscribed = await kv.get(["price", chatId])
+    .then((res) => !!res.value);
+
+  const extraButtons = Object.entries(ExtraButtons).reduce<string[]>(
+    (buttons, [button, fn]) => {
+      if (fn(isSubscribed)) {
+        buttons.push(button);
+      }
+
+      return buttons;
+    },
+    [],
+  );
+
+  return Markup.keyboard(
+    [...splitIntoPairs(Object.keys(BIKES)), extraButtons],
+  ).resize();
+};
+
+const getDebugKeyboard = () => {
+  return Markup.keyboard(
+    splitIntoPairs(Object.keys(DebugButtons)),
+  ).resize();
+};
+
+const notifySubscribers = async () => {
+  const entries = kv.list({ prefix: ["price"] });
+  for await (const entry of entries) {
+    await bot.telegram.sendMessage(
+      entry.key[1].toString(),
+      "Цена возможно изменилась",
+    );
+  }
+};
+
 // bootstrap
-(async () => {
+(() => {
   try {
-    bot.start((ctx) => {
+    bot.start(async (ctx) => {
       ctx.replyWithHTML(
         "Добро пожаловать в <b>bike-price-bot</b>\n\n" +
           "Для получения цены используйте кнопки <b>ниже</b>",
-        Markup.keyboard([
-          Object.keys(BIKES),
-        ]).resize(),
+        await getKeyboard(ctx.chat.id),
       );
     });
 
-    Object.entries(BIKES).forEach(([bike, apiUrl]) => {
+    Object.entries(BIKES).forEach(([bike, data]) => {
       bot.hears(bike, async (ctx) => {
-        const info = await getInfo(apiUrl);
+        const info = await getInfo(data.dataUrl);
         if (!info) {
-          return ctx.reply('Ошибка API')
+          return ctx.reply("Ошибка API");
         }
-        ctx.reply(`${info.model}\n${info.price} рублей`);
+        ctx.replyWithPhoto(
+          data.imageUrl,
+          {
+            caption: `${info.model}\nЦена: ${info.price} рублей`,
+            ...(await getKeyboard(ctx.chat.id)),
+          },
+        );
+      });
+    });
+
+    /** Дополнительные кнопки */
+    Object.keys(ExtraButtons).forEach((button) => {
+      bot.hears(button, async (ctx) => {
+        switch (button as ExtraButtonsKeys) {
+          case "Подписаться на изменения цены":
+            await kv.set(["price", ctx.chat.id], 1);
+            ctx.reply(
+              "Вы подписались на уведомления об изменения цены",
+              await getKeyboard(ctx.chat.id),
+            );
+            break;
+          case "Прекратить подписку":
+            await kv.delete(["price", ctx.chat.id]);
+            ctx.reply("Подписка отменена", await getKeyboard(ctx.chat.id));
+            break;
+          case "Debug":
+            ctx.reply("Enter debug mode", getDebugKeyboard());
+            break;
+          default:
+            ctx.reply("Нет!❌❌❌");
+        }
+      });
+    });
+
+    /** Debug кнопки */
+    Object.entries(DebugButtons).forEach(([button, data]) => {
+      bot.hears(button, async (ctx) => {
+        switch (button as DebugButtonsKeys) {
+          case "Список подписчиков": {
+            let msg = "";
+            const entries = kv.list({ prefix: ["price"] });
+            for await (const entry of entries) {
+              msg += entry.key[1].toString() + "\n";
+            }
+            ctx.reply(msg || "Подписчиков нет");
+
+            break;
+          }
+          case "Тест уведомления": {
+            const entries = kv.list({ prefix: ["price"] });
+            for await (const entry of entries) {
+              await bot.telegram.sendMessage(
+                entry.key[1].toString(),
+                "Тестовое сообщение уведомления",
+              );
+            }
+
+            break;
+          }
+          case "Exit debug":
+            ctx.reply("Enter normal mode", await getKeyboard(ctx.chat.id));
+            break;
+          default:
+            ctx.reply("🥺");
+        }
       });
     });
 
