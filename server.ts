@@ -1,10 +1,12 @@
 import { Markup, Telegraf } from "npm:telegraf";
 import {
+  BikeKey,
   BIKES,
   DebugButtons,
-  DebugButtonsKeys,
+  DebugButtonsKey,
   ExtraButtons,
-  ExtraButtonsKeys,
+  ExtraButtonsKey,
+  KVPrefix,
   PRICE_KEY,
 } from "./constants.ts";
 import { splitIntoPairs } from "./utils.ts";
@@ -19,14 +21,16 @@ const kv = await Deno.openKv();
 
 /** HTTP server */
 Deno.serve({ port: 3000 }, async (_req) => {
-  await notifySubscribers();
+  await updatePrice();
 
   return new Response("ok");
 });
 
 const bot = new Telegraf(TOKEN);
 
-const getInfo = async (url: string) => {
+const getInfo = async (
+  url: string,
+): Promise<{ model: string; price: number } | void> => {
   console.log(`Getting info for ${url}`);
   try {
     const response = await fetch(
@@ -51,7 +55,7 @@ const getInfo = async (url: string) => {
 };
 
 const getKeyboard = async (chatId: number) => {
-  const isSubscribed = await kv.get(["price", chatId])
+  const isSubscribed = await kv.get([KVPrefix.NOTIFY_SUBSCRIPTION, chatId])
     .then((res) => !!res.value);
 
   const extraButtons = Object.entries(ExtraButtons).reduce<string[]>(
@@ -76,12 +80,32 @@ const getDebugKeyboard = () => {
   ).resize();
 };
 
-const notifySubscribers = async () => {
-  const entries = kv.list({ prefix: ["price"] });
+const updatePrice = async () => {
+  const bikeKey: BikeKey = "Turbo Levo SL Expert (2023)";
+
+  const data = BIKES[bikeKey];
+
+  const info = await getInfo(data.dataUrl);
+  if (!info) {
+    return;
+  }
+
+  const currentPrice = info.price;
+  const prevPrice = await kv.get([KVPrefix.PRICE, bikeKey]).then((res) =>
+    res.value
+  );
+  if (prevPrice && currentPrice !== prevPrice) {
+    await kv.set([KVPrefix.PRICE, bikeKey], currentPrice);
+    await notifySubscribers(currentPrice);
+  }
+};
+
+const notifySubscribers = async (price: number) => {
+  const entries = kv.list({ prefix: [KVPrefix.NOTIFY_SUBSCRIPTION] });
   for await (const entry of entries) {
     await bot.telegram.sendMessage(
       entry.key[1].toString(),
-      "Цена возможно изменилась",
+      `Новая цена: ${price}`,
     );
   }
 };
@@ -116,16 +140,16 @@ const notifySubscribers = async () => {
     /** Дополнительные кнопки */
     Object.keys(ExtraButtons).forEach((button) => {
       bot.hears(button, async (ctx) => {
-        switch (button as ExtraButtonsKeys) {
+        switch (button as ExtraButtonsKey) {
           case "Подписаться на изменения цены":
-            await kv.set(["price", ctx.chat.id], 1);
+            await kv.set([KVPrefix.NOTIFY_SUBSCRIPTION, ctx.chat.id], 1);
             ctx.reply(
               "Вы подписались на уведомления об изменения цены",
               await getKeyboard(ctx.chat.id),
             );
             break;
           case "Прекратить подписку":
-            await kv.delete(["price", ctx.chat.id]);
+            await kv.delete([KVPrefix.NOTIFY_SUBSCRIPTION, ctx.chat.id]);
             ctx.reply("Подписка отменена", await getKeyboard(ctx.chat.id));
             break;
           case "Debug":
@@ -140,7 +164,7 @@ const notifySubscribers = async () => {
     /** Debug кнопки */
     Object.entries(DebugButtons).forEach(([button, data]) => {
       bot.hears(button, async (ctx) => {
-        switch (button as DebugButtonsKeys) {
+        switch (button as DebugButtonsKey) {
           case "Список подписчиков": {
             let msg = "";
             const entries = kv.list({ prefix: ["price"] });
