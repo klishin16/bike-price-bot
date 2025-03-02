@@ -1,4 +1,4 @@
-import { Markup, Telegraf } from "npm:telegraf";
+import { Telegraf } from "npm:telegraf";
 import {
   BikeKey,
   BIKES,
@@ -6,19 +6,12 @@ import {
   DebugButtonsKey,
   ExtraButtons,
   ExtraButtonsKey,
-  KVPrefix,
   PRICE_KEY,
 } from "./constants.ts";
-import { splitIntoPairs } from "./utils.ts";
-
-const TOKEN = Deno.env.get("BOT_TOKEN");
-if (!TOKEN) {
-  throw new Error("Bot token doesn't exist");
-}
-const ADMIN_CHAT_ID = parseInt(Deno.env.get("ADMIN_CHAT_ID") ?? '0');
-
-/** DB */
-const kv = await Deno.openKv();
+import db from "./database.ts";
+import { BikeInfo } from "./types.ts";
+import config from "./config.ts";
+import { getDebugKeyboard, getKeyboard } from "./keyboards.ts";
 
 /** HTTP server */
 Deno.serve({ port: 3000 }, async (_req) => {
@@ -27,96 +20,157 @@ Deno.serve({ port: 3000 }, async (_req) => {
   return new Response("ok");
 });
 
-const bot = new Telegraf(TOKEN);
+const bot = new Telegraf(config.TOKEN);
 
 const getInfo = async (
   url: string,
-): Promise<{ model: string; price: number } | void> => {
+): Promise<BikeInfo> => {
   console.log(`Getting info for ${url}`);
-  try {
-    const response = await fetch(
-      new Request(url, {
-        headers: {
-          "Host": "dc.tradeinn.com",
-          "Referer":
-            "https://www.tradeinn.com/bikeinn/ru/specialized-%D0%AD%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9-%D0%B3%D0%BE%D1%80%D0%BD%D1%8B%D0%B9-%D0%B2%D0%B5%D0%BB%D0%BE%D1%81%D0%B8%D0%BF%D0%B5%D0%B4-turbo-levo-sl-expert-29-27.5-gx-eagle-2023/140247111/p",
-        },
-      }),
-    );
-
-    const data = await response.json();
-
-    return {
-      model: data._source.model.eng,
-      price: data._source[PRICE_KEY],
-    };
-  } catch (error) {
-    console.error("Error fetching price:", error);
-  }
-};
-
-const getKeyboard = async (chatId: number) => {
-  const isSubscribed = await kv.get([KVPrefix.NOTIFY_SUBSCRIPTION, chatId])
-    .then((res) => !!res.value);
-  const isAdminChat = chatId === ADMIN_CHAT_ID;
-
-  const extraButtons = Object.entries(ExtraButtons).reduce<string[]>(
-    (buttons, [button, fn]) => {
-      if (fn(isSubscribed, isAdminChat)) {
-        buttons.push(button);
-      }
-
-      return buttons;
-    },
-    [],
+  const response = await fetch(
+    new Request(url, {
+      headers: {
+        "Host": "dc.tradeinn.com",
+        "Referer":
+          "https://www.tradeinn.com/bikeinn/ru/specialized-%D0%AD%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9-%D0%B3%D0%BE%D1%80%D0%BD%D1%8B%D0%B9-%D0%B2%D0%B5%D0%BB%D0%BE%D1%81%D0%B8%D0%BF%D0%B5%D0%B4-turbo-levo-sl-expert-29-27.5-gx-eagle-2023/140247111/p",
+      },
+    }),
   );
 
-  return Markup.keyboard(
-    [...splitIntoPairs(Object.keys(BIKES)), extraButtons],
-  ).resize();
-};
+  const data = await response.json();
 
-const getDebugKeyboard = () => {
-  return Markup.keyboard(
-    splitIntoPairs(Object.keys(DebugButtons)),
-  ).resize();
+  return {
+    model: data._source.model.eng,
+    price: data._source[PRICE_KEY],
+  };
 };
 
 const updatePrice = async () => {
-  const bikeKey: BikeKey = "Turbo Levo SL Expert (2023)";
+  const requestsPromises: Promise<{
+    bike: string;
+    bikeInfo: BikeInfo;
+  }>[] = [];
 
-  const data = BIKES[bikeKey];
+  Object.entries(BIKES).map(([bike, data]) => {
+    requestsPromises.push(new Promise((resolve) => {
+      getInfo(data.dataUrl).then(bikeInfo => {
+        resolve({
+          bike,
+          bikeInfo,
+        })
+      });
+    }));
 
-  const info = await getInfo(data.dataUrl);
-  if (!info) {
-    return;
-  }
+  });
 
-  const currentPrice = info.price;
-  const prevPrice = await kv.get([KVPrefix.PRICE, bikeKey]).then((res) =>
-    res.value
-  );
+  const responses = await Promise.all(requestsPromises);
 
-  if (!prevPrice) {
-    await kv.set([KVPrefix.PRICE, bikeKey], currentPrice);
-    return
-  }
+  for (const { bike, bikeInfo } of responses) {
+    const prevPrice = await db.getCurrentPrice(bike);
+    const currentPrice = bikeInfo.price;
 
-  if (currentPrice !== prevPrice) {
-    await kv.set([KVPrefix.PRICE, bikeKey], currentPrice);
-    await notifySubscribers(currentPrice);
+    if (!prevPrice) {
+      await db.setCurrentPrice(bike, currentPrice);
+      return;
+    }
+
+    if (currentPrice !== prevPrice) {
+      await db.setCurrentPrice(bike, currentPrice);
+      await notifySubscribers(bike, currentPrice);
+    }
   }
 };
 
-const notifySubscribers = async (price: number) => {
-  const entries = kv.list({ prefix: [KVPrefix.NOTIFY_SUBSCRIPTION] });
+const notifySubscribers = async (bike: BikeKey, price: number) => {
+  const entries = db.getSubscribedUsers();
   for await (const entry of entries) {
     await bot.telegram.sendMessage(
       entry.key[1].toString(),
-      `Новая цена: ${price}`,
+      `У ${bike}\nНовая цена: ${price}`,
     );
   }
 };
+
+/** Bikes кнопки */
+const prepareBikesButtonsHears = () => {
+  Object.entries(BIKES).forEach(([bike, data]) => {
+    bot.hears(bike, async (ctx) => {
+      const info = await getInfo(data.dataUrl);
+      if (!info) {
+        return ctx.reply("Ошибка API");
+      }
+      ctx.replyWithPhoto(
+          data.imageUrl,
+          {
+            caption: `${info.model}\nЦена: ${info.price} рублей`,
+            ...(await getKeyboard(ctx.chat.id)),
+          },
+      );
+    });
+  });
+}
+
+
+/** Дополнительные кнопки */
+const prepareExtraButtonsHears = () => {
+  Object.keys(ExtraButtons).forEach((button) => {
+    bot.hears(button, async (ctx) => {
+      switch (button as ExtraButtonsKey) {
+        case "Подписаться на изменения цены":
+          await db.setSubscribed(ctx.chat.id);
+          ctx.reply(
+              "Вы подписались на уведомления об изменения цены",
+              await getKeyboard(ctx.chat.id),
+          );
+          break;
+        case "Прекратить подписку":
+          await db.deleteSubscription(ctx.chat.id);
+          ctx.reply("Подписка отменена", await getKeyboard(ctx.chat.id));
+          break;
+        case "Debug":
+          ctx.reply("Enter debug mode", getDebugKeyboard());
+          break;
+        default:
+          ctx.reply("Нет!❌❌❌");
+      }
+    });
+  });
+}
+
+/** Debug кнопки */
+const prepareDebugButtons = () => {
+  Object.keys(DebugButtons).forEach((button) => {
+    bot.hears(button, async (ctx) => {
+      switch (button as DebugButtonsKey) {
+        case "Список подписчиков": {
+          let msg = "";
+          const entries = db.getSubscribedUsers();
+          for await (const entry of entries) {
+            msg += entry.key[1].toString() + "\n";
+          }
+          ctx.reply(msg || "Подписчиков нет");
+
+          break;
+        }
+        case "Тест уведомления": {
+          const entries = db.getSubscribedUsers();
+          for await (const entry of entries) {
+            await bot.telegram.sendMessage(
+                entry.key[1].toString(),
+                "Тестовое сообщение уведомления",
+            );
+          }
+
+          break;
+        }
+        case "Exit debug":
+          ctx.reply("Enter normal mode", await getKeyboard(ctx.chat.id));
+          break;
+        default:
+          ctx.reply("🥺");
+      }
+    });
+  });
+}
 
 // bootstrap
 (() => {
@@ -129,79 +183,9 @@ const notifySubscribers = async (price: number) => {
       );
     });
 
-    Object.entries(BIKES).forEach(([bike, data]) => {
-      bot.hears(bike, async (ctx) => {
-        const info = await getInfo(data.dataUrl);
-        if (!info) {
-          return ctx.reply("Ошибка API");
-        }
-        ctx.replyWithPhoto(
-          data.imageUrl,
-          {
-            caption: `${info.model}\nЦена: ${info.price} рублей`,
-            ...(await getKeyboard(ctx.chat.id)),
-          },
-        );
-      });
-    });
-
-    /** Дополнительные кнопки */
-    Object.keys(ExtraButtons).forEach((button) => {
-      bot.hears(button, async (ctx) => {
-        switch (button as ExtraButtonsKey) {
-          case "Подписаться на изменения цены":
-            await kv.set([KVPrefix.NOTIFY_SUBSCRIPTION, ctx.chat.id], 1);
-            ctx.reply(
-              "Вы подписались на уведомления об изменения цены",
-              await getKeyboard(ctx.chat.id),
-            );
-            break;
-          case "Прекратить подписку":
-            await kv.delete([KVPrefix.NOTIFY_SUBSCRIPTION, ctx.chat.id]);
-            ctx.reply("Подписка отменена", await getKeyboard(ctx.chat.id));
-            break;
-          case "Debug":
-            ctx.reply("Enter debug mode", getDebugKeyboard());
-            break;
-          default:
-            ctx.reply("Нет!❌❌❌");
-        }
-      });
-    });
-
-    /** Debug кнопки */
-    Object.entries(DebugButtons).forEach(([button, data]) => {
-      bot.hears(button, async (ctx) => {
-        switch (button as DebugButtonsKey) {
-          case "Список подписчиков": {
-            let msg = "";
-            const entries = kv.list({ prefix: ["price"] });
-            for await (const entry of entries) {
-              msg += entry.key[1].toString() + "\n";
-            }
-            ctx.reply(msg || "Подписчиков нет");
-
-            break;
-          }
-          case "Тест уведомления": {
-            const entries = kv.list({ prefix: ["price"] });
-            for await (const entry of entries) {
-              await bot.telegram.sendMessage(
-                entry.key[1].toString(),
-                "Тестовое сообщение уведомления",
-              );
-            }
-
-            break;
-          }
-          case "Exit debug":
-            ctx.reply("Enter normal mode", await getKeyboard(ctx.chat.id));
-            break;
-          default:
-            ctx.reply("🥺");
-        }
-      });
-    });
+    prepareBikesButtonsHears();
+    prepareExtraButtonsHears();
+    prepareDebugButtons();
 
     bot.launch().then(() => console.log("Bot launched successfully"));
   } catch (error) {
