@@ -32,9 +32,9 @@ const setCurrentPrice = (bikeKey: BikeKey, price: number) => {
 // TODO param: string[] | string
 const setNumber = (key: string, value: number) => kv.set([key], value);
 
-const getNumber = async (key: string): Promise<unknown> => {
+const getNumber = async (key: string): Promise<number> => {
   const res = await kv.get([key]);
-  return res.value;
+  return res.value as number;
 }
 
 const db = {

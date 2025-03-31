@@ -1,112 +1,24 @@
 import { Telegraf } from "npm:telegraf";
-import {
-  BIKES,
-  DebugButtons,
-  DebugButtonsKey,
-  ExtraButtons,
-  ExtraButtonsKey,
-  PRICE_KEY,
-} from "./constants.ts";
+import { BIKES, DebugButtons, DebugButtonsKey, ExtraButtons, ExtraButtonsKey, } from "./constants.ts";
 import db from "./database.ts";
-import { BikeInfo } from "./types.ts";
 import config from "./config.ts";
 import { getDebugKeyboard, getKeyboard } from "./keyboards.ts";
-import { AVITO_DB_COUNT_KEY, AVITO_SPECIALIZEDES_URL, fetchAvitoPage, parseListingCount } from "./avito/index.ts";
+import { handleAvito } from "./avito/index.ts";
+import { getInfo } from "./bikeinn/index.ts";
+import { handleBikeinn } from "./bikeinn/handler.ts";
 
 /** HTTP server */
 Deno.serve({ port: 3000 }, async (_req) => {
-  await updatePrice();
+  await handleBikeinn();
 
-  /** Avito */
-  await avito()
+  await handleAvito();
 
   return new Response("ok");
 });
 
 const bot = new Telegraf(config.TOKEN);
 
-const getInfo = async (
-  url: string,
-): Promise<BikeInfo> => {
-  console.log(`Getting info for ${url}`);
-  const response = await fetch(
-    new Request(url, {
-      headers: {
-        "Host": "dc.tradeinn.com",
-        "Referer":
-          "https://www.tradeinn.com/bikeinn/ru/specialized-%D0%AD%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9-%D0%B3%D0%BE%D1%80%D0%BD%D1%8B%D0%B9-%D0%B2%D0%B5%D0%BB%D0%BE%D1%81%D0%B8%D0%BF%D0%B5%D0%B4-turbo-levo-sl-expert-29-27.5-gx-eagle-2023/140247111/p",
-      },
-    }),
-  );
-
-  const data = await response.json();
-
-  return {
-    model: data._source.model.eng,
-    price: data._source[PRICE_KEY],
-  };
-};
-
-const avito = async () => {
-  try {
-    const html = await fetchAvitoPage(AVITO_SPECIALIZEDES_URL);
-    const listingCount = parseListingCount(html);
-
-    const prevListingCount = await db.getNumber(AVITO_DB_COUNT_KEY);
-    if (!prevListingCount) {
-      await db.setCurrentPrice(AVITO_DB_COUNT_KEY, listingCount);
-      return listingCount;
-    }
-
-    if (prevListingCount !== listingCount) {
-      await db.setCurrentPrice(AVITO_DB_COUNT_KEY, listingCount);
-      await notifySubscribers(`Изменилось количество объявлений на Avito: ${listingCount}`);
-    }
-
-    return listingCount;
-  } catch (error) {
-    console.error("Avito module error:", error);
-  }
-}
-
-const updatePrice = async () => {
-  const requestsPromises: Promise<{
-    bike: string;
-    bikeInfo: BikeInfo;
-  }>[] = [];
-
-  Object.entries(BIKES).map(([bike, data]) => {
-    requestsPromises.push(
-      new Promise((resolve) => {
-        getInfo(data.dataUrl).then((bikeInfo) => {
-          resolve({
-            bike,
-            bikeInfo,
-          });
-        });
-      }),
-    );
-  });
-
-  const responses = await Promise.all(requestsPromises);
-
-  for (const { bike, bikeInfo } of responses) {
-    const prevPrice = await db.getCurrentPrice(bike) as number | undefined;
-    const currentPrice = bikeInfo.price;
-
-    if (!prevPrice) {
-      await db.setCurrentPrice(bike, currentPrice);
-      return;
-    }
-
-    if (currentPrice !== prevPrice) {
-      await db.setCurrentPrice(bike, currentPrice);
-      await notifySubscribers(`У ${bike}\nНовая цена: ${currentPrice} (${currentPrice - prevPrice > 0 ? '+' : ''} ${currentPrice - prevPrice})`);
-    }
-  }
-};
-
-const notifySubscribers = async (message: string) => {
+export const notifySubscribers = async (message: string) => {
   const entries = db.getSubscribedUsers();
   for await (const entry of entries) {
     await bot.telegram.sendMessage(
@@ -198,7 +110,7 @@ const prepareDebugButtons = () => {
             break;
           }
         case "Avito" : {
-          const count = await avito();
+          const count = await handleAvito();
           ctx.reply(count?.toString() || 'Нет информации');
           break;
         }
