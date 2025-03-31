@@ -4,3 +4,4 @@ export const AVITO_SPECIALIZEDES_URL = 'https://www.avito.ru/all/velosipedy/gorn
 
 export const AVITO_DB_COUNT_KEY = 'AVITO_COUNT_KEY';
 export const AVITO_DB_LAST_FETCH_TIMESTAMP = 'AVITO_LAST_FETCH_TIMESTAMP';
+export const AVITO_DB_PAGE = 'AVITO_DB_AGE';

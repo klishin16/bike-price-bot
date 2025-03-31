@@ -30,12 +30,37 @@ const setCurrentPrice = (bikeKey: BikeKey, price: number) => {
 
 /** Абстракции */
 // TODO param: string[] | string
-const setNumber = (key: string, value: number) => kv.set([key], value);
+const setValue = (key: string, value: number | string) => kv.set([key], value);
 
-const getNumber = async (key: string): Promise<number> => {
+const getValue = async <T extends number | string>(key: string): Promise<T> => {
   const res = await kv.get([key]);
-  return res.value as number;
+  return res.value as T;
 }
+
+const writeLargeString = async (key: string, content: string, chunkSize = 32000) => {
+  console.log('Content size', content.length);
+  const chunks = [];
+  for (let i = 0; i < content.length; i += chunkSize) {
+    chunks.push(content.slice(i, i + chunkSize));
+  }
+  await kv.set([key, "chunks"], chunks.length);
+  for (let i = 0; i < chunks.length; i++) {
+    await kv.set([key, `chunk_${i}`], chunks[i]);
+  }
+}
+
+const readLargeString = async (key: string) => {
+  const chunkCount = (await kv.get<number>([key, "chunks"])).value;
+  if (chunkCount === null) return null;
+
+  let content = "";
+  for (let i = 0; i < chunkCount; i++) {
+    const chunk = (await kv.get<string>([key, `chunk_${i}`])).value;
+    if (chunk) content += chunk;
+  }
+  return content;
+}
+
 
 const db = {
   getSubscribedUsers,
@@ -44,8 +69,10 @@ const db = {
   deleteSubscription,
   getCurrentPrice,
   setCurrentPrice,
-  setNumber,
-  getNumber,
+  setValue,
+  getValue,
+  writeLargeString,
+  readLargeString,
 }
 
 export default db;

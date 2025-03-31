@@ -20,11 +20,10 @@ export function parseListingCount(html: string) {
     return countText ? parseInt(countText.replace(/\D/g, ""), 10) : 0;
 }
 
-// (async () => {
-//     try {
-//         const listings = await fetchAvitoListings(AVITO_URL);
-//         console.log(listings);
-//     } catch (error) {
-//         console.error("Error:", error);
-//     }
-// })();
+export function minimizeHtml(html: string) {
+    const $ = cheerio.load(html);
+    const itemsContainer = $("div[class^='index-center']").first();
+
+    // Извлекаем часть дерева
+    return $.html(itemsContainer);
+}

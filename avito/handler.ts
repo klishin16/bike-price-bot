@@ -7,14 +7,14 @@ export const handleAvito = async () => {
         const html = await fetchAvitoPageWithCache(AVITO_SPECIALIZEDES_URL);
         const listingCount = parseListingCount(html);
 
-        const prevListingCount = await db.getNumber(AVITO_DB_COUNT_KEY);
+        const prevListingCount = await db.getValue(AVITO_DB_COUNT_KEY);
         if (!prevListingCount) {
-            await db.setNumber(AVITO_DB_COUNT_KEY, listingCount);
+            await db.setValue(AVITO_DB_COUNT_KEY, listingCount);
             return listingCount;
         }
 
         if (prevListingCount !== listingCount) {
-            await db.setNumber(AVITO_DB_COUNT_KEY, listingCount);
+            await db.setValue(AVITO_DB_COUNT_KEY, listingCount);
             await notifySubscribers(`Изменилось количество объявлений на Avito: ${listingCount}`);
         }
 
