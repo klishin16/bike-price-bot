@@ -1,0 +1,5 @@
+export const AVITO_PAGE = 'avito-page.html';
+
+export const AVITO_SPECIALIZEDES_URL = 'https://www.avito.ru/all/velosipedy/gornye-ASgBAgICAUS4AqgK?q=specialized+turbo+levo+sl'
+
+export const AVITO_DB_COUNT_KEY = 'AVITO_COUNT_KEY';

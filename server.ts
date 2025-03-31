@@ -1,6 +1,5 @@
 import { Telegraf } from "npm:telegraf";
 import {
-  BikeKey,
   BIKES,
   DebugButtons,
   DebugButtonsKey,
@@ -12,10 +11,14 @@ import db from "./database.ts";
 import { BikeInfo } from "./types.ts";
 import config from "./config.ts";
 import { getDebugKeyboard, getKeyboard } from "./keyboards.ts";
+import { AVITO_DB_COUNT_KEY, AVITO_SPECIALIZEDES_URL, fetchAvitoPage, parseListingCount } from "./avito/index.ts";
 
 /** HTTP server */
 Deno.serve({ port: 3000 }, async (_req) => {
   await updatePrice();
+
+  /** Avito */
+  await avito()
 
   return new Response("ok");
 });
@@ -44,6 +47,28 @@ const getInfo = async (
   };
 };
 
+const avito = async () => {
+  try {
+    const html = await fetchAvitoPage(AVITO_SPECIALIZEDES_URL);
+    const listingCount = parseListingCount(html);
+
+    const prevListingCount = await db.getNumber(AVITO_DB_COUNT_KEY);
+    if (!prevListingCount) {
+      await db.setCurrentPrice(AVITO_DB_COUNT_KEY, listingCount);
+      return listingCount;
+    }
+
+    if (prevListingCount !== listingCount) {
+      await db.setCurrentPrice(AVITO_DB_COUNT_KEY, listingCount);
+      await notifySubscribers(`Изменилось количество объявлений на Avito: ${listingCount}`);
+    }
+
+    return listingCount;
+  } catch (error) {
+    console.error("Avito module error:", error);
+  }
+}
+
 const updatePrice = async () => {
   const requestsPromises: Promise<{
     bike: string;
@@ -51,21 +76,22 @@ const updatePrice = async () => {
   }>[] = [];
 
   Object.entries(BIKES).map(([bike, data]) => {
-    requestsPromises.push(new Promise((resolve) => {
-      getInfo(data.dataUrl).then(bikeInfo => {
-        resolve({
-          bike,
-          bikeInfo,
-        })
-      });
-    }));
-
+    requestsPromises.push(
+      new Promise((resolve) => {
+        getInfo(data.dataUrl).then((bikeInfo) => {
+          resolve({
+            bike,
+            bikeInfo,
+          });
+        });
+      }),
+    );
   });
 
   const responses = await Promise.all(requestsPromises);
 
   for (const { bike, bikeInfo } of responses) {
-    const prevPrice = await db.getCurrentPrice(bike);
+    const prevPrice = await db.getCurrentPrice(bike) as number | undefined;
     const currentPrice = bikeInfo.price;
 
     if (!prevPrice) {
@@ -75,17 +101,17 @@ const updatePrice = async () => {
 
     if (currentPrice !== prevPrice) {
       await db.setCurrentPrice(bike, currentPrice);
-      await notifySubscribers(bike, currentPrice);
+      await notifySubscribers(`У ${bike}\nНовая цена: ${currentPrice} (${currentPrice - prevPrice > 0 ? '+' : ''} ${currentPrice - prevPrice})`);
     }
   }
 };
 
-const notifySubscribers = async (bike: BikeKey, price: number) => {
+const notifySubscribers = async (message: string) => {
   const entries = db.getSubscribedUsers();
   for await (const entry of entries) {
     await bot.telegram.sendMessage(
       entry.key[1].toString(),
-      `У ${bike}\nНовая цена: ${price}`,
+      message,
     );
   }
 };
@@ -99,16 +125,15 @@ const prepareBikesButtonsHears = () => {
         return ctx.reply("Ошибка API");
       }
       ctx.replyWithPhoto(
-          data.imageUrl,
-          {
-            caption: `${info.model}\nЦена: ${info.price} рублей`,
-            ...(await getKeyboard(ctx.chat.id)),
-          },
+        data.imageUrl,
+        {
+          caption: `${info.model}\nЦена: ${info.price} рублей`,
+          ...(await getKeyboard(ctx.chat.id)),
+        },
       );
     });
   });
-}
-
+};
 
 /** Дополнительные кнопки */
 const prepareExtraButtonsHears = () => {
@@ -118,8 +143,8 @@ const prepareExtraButtonsHears = () => {
         case "Подписаться на изменения цены":
           await db.setSubscribed(ctx.chat.id);
           ctx.reply(
-              "Вы подписались на уведомления об изменения цены",
-              await getKeyboard(ctx.chat.id),
+            "Вы подписались на уведомления об изменения цены",
+            await getKeyboard(ctx.chat.id),
           );
           break;
         case "Прекратить подписку":
@@ -134,7 +159,7 @@ const prepareExtraButtonsHears = () => {
       }
     });
   });
-}
+};
 
 /** Debug кнопки */
 const prepareDebugButtons = () => {
@@ -155,11 +180,26 @@ const prepareDebugButtons = () => {
           const entries = db.getSubscribedUsers();
           for await (const entry of entries) {
             await bot.telegram.sendMessage(
-                entry.key[1].toString(),
-                "Тестовое сообщение уведомления",
+              entry.key[1].toString(),
+              "Тестовое сообщение уведомления",
             );
           }
 
+          break;
+        }
+        case "Веб ссылки":
+          {
+            let msg = "";
+            Object.entries(BIKES).forEach(([bike, data]) => {
+              msg += `${bike}\n${data.webUrl}\n`;
+            });
+            ctx.reply(msg);
+
+            break;
+          }
+        case "Avito" : {
+          const count = await avito();
+          ctx.reply(count?.toString() || 'Нет информации');
           break;
         }
         case "Exit debug":
@@ -170,7 +210,7 @@ const prepareDebugButtons = () => {
       }
     });
   });
-}
+};
 
 // bootstrap
 (() => {

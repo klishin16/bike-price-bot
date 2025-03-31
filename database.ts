@@ -28,6 +28,15 @@ const setCurrentPrice = (bikeKey: BikeKey, price: number) => {
   return kv.set([KVPrefix.PRICE, bikeKey], price);
 }
 
+/** Абстракции */
+// TODO param: string[] | string
+const setNumber = (key: string, value: number) => kv.set([key], value);
+
+const getNumber = async (key: string): Promise<unknown> => {
+  const res = await kv.get([key]);
+  return res.value;
+}
+
 const db = {
   getSubscribedUsers,
   isUserSubscribed,
@@ -35,6 +44,8 @@ const db = {
   deleteSubscription,
   getCurrentPrice,
   setCurrentPrice,
+  setNumber,
+  getNumber,
 }
 
 export default db;
