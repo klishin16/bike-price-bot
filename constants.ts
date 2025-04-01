@@ -42,9 +42,10 @@ export const ExtraButtons: Record<
   string,
   (isSubscribed: boolean, isAdminChat: boolean) => boolean
 > = {
-  "Можно заказать?🥺": () => true,
+  // "Можно заказать?🥺": () => true,
   "Подписаться на изменения цены": (isSubscribed) => !isSubscribed,
   "Прекратить подписку": (isSubscribed) => isSubscribed,
+  "Avito": () => true,
   "Debug": (_, isAdminChat) => isAdminChat,
 } as const;
 
