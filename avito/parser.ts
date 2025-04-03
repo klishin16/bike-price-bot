@@ -1,14 +1,16 @@
 import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
+import { AvitoListing } from "./types.ts";
 
 
-export function parseAvitoListings(html: string) {
+export function parseAvitoListings(html: string): AvitoListing[] {
     const $ = cheerio.load(html);
 
     const listings = $("div[itemtype*='http://schema.org/Product']").map((_, el) => {
+        const id = el.attribs['data-item-id'];
         const title = $(el).find("h3").text().trim();
-        const price = $(el).find(".price-text-_YGDY").text().trim();
+        const price = $(el).find("[data-marker='item-price']").text().trim();
         const link = "https://www.avito.ru" + $(el).find("a").attr("href");
-        return { title, price, link };
+        return { id, title, price, link };
     }).get();
 
     return listings;

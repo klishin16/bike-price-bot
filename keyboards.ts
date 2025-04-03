@@ -117,7 +117,7 @@ export const botHandlerFactory = (bot: Telegraf) => {
 
                         break;
                     }
-                    case "Avito" : {
+                    case "Avito count" : {
                         const count = await handleAvito();
                         ctx.reply(count?.toString() || 'Нет информации');
                         break;

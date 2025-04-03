@@ -55,7 +55,7 @@ export const DebugButtons = {
   "Список подписчиков": "europe",
   "Тест уведомления": "subscription-test",
   "Веб ссылки": "web-links",
-  "Avito": 'avito',
+  "Avito count": 'avito',
   "Exit debug": "exit-debug",
 } as const;
 
