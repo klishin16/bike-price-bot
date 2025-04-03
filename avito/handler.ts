@@ -1,5 +1,5 @@
 import {
-  AVITO_DB_COUNT_KEY,
+  AVITO_DB_COUNT_KEY, AVITO_DB_LISTINGS,
   AVITO_SPECIALIZEDES_URL,
   fetchAvitoPage,
   parseAvitoListings,
@@ -15,7 +15,7 @@ export const handleAvito = async () => {
     const listingCount = parseListingCount(html);
     const listings = parseAvitoListings(html);
 
-    const raw: string = await db.getValue("LISTINGS");
+    const raw: string = await db.getValue(AVITO_DB_LISTINGS);
     const prevListings: AvitoListing[] = JSON.parse(raw) || [];
     console.log("Prev listnings", prevListings.length);
     const prevListingsMap = new Map(
@@ -38,7 +38,7 @@ export const handleAvito = async () => {
       }
             `);
     }
-    await db.setValue("LISTINGS", JSON.stringify(listings));
+    await db.setValue(AVITO_DB_LISTINGS, JSON.stringify(listings));
 
     const prevListingCount = await db.getValue(AVITO_DB_COUNT_KEY);
     if (!prevListingCount) {
