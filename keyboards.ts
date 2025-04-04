@@ -2,8 +2,8 @@ import db from "./database.ts";
 import { BIKES, DebugButtons, DebugButtonsKey, ExtraButtons, ExtraButtonsKey } from "./constants.ts";
 import { splitIntoPairs } from "./utils.ts";
 import config from "./config.ts";
-import { Context, Markup, Telegraf } from "npm:telegraf";
-import { getInfo, handleAvito } from "./bikeinn/index.ts";
+import { Markup, Telegraf } from "npm:telegraf";
+import { getInfo } from "./bikeinn/index.ts";
 import { AVITO_SPECIALIZEDES_URL } from "./avito/index.ts";
 
 export const getKeyboard = async (chatId: number) => {
