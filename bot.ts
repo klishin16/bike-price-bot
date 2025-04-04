@@ -14,16 +14,19 @@ export class Bot {
   }
 
   public processHandlers() {
-    return Promise.allSettled(this.handlers.map((handler) => handler.handle(this)));
-  };
+    this.logger.info('Process handlers')
+    return Promise.allSettled(
+      this.handlers.map((handler) => handler.handle(this)),
+    );
+  }
 
   public async launch() {
     try {
       this.tgBot.start(async (ctx) => {
         ctx.replyWithHTML(
-            "Добро пожаловать в <b>bike-price-bot</b>\n\n" +
+          "Добро пожаловать в <b>bike-price-bot</b>\n\n" +
             "Для получения цены используйте кнопки <b>ниже</b>",
-            await getKeyboard(ctx.chat.id),
+          await getKeyboard(ctx.chat.id),
         );
       });
       const {
@@ -36,9 +39,13 @@ export class Bot {
       prepareExtraButtonsHears();
       prepareDebugButtons();
 
-      console.log('here')
-      await this.tgBot.launch();
-      this.logger.info("Bot launched successfully")
+      this.tgBot.launch();
+      this.logger.info("Bot launch successfully");
+      this.logger.info(
+        `Handlers: ${
+          this.handlers.map((handler) => handler.getName()).join(", ")
+        }`,
+      );
     } catch (error) {
       console.error("Error initializing bot:", error);
     }
@@ -48,9 +55,9 @@ export class Bot {
     const entries = db.getSubscribedUsers();
     for await (const entry of entries) {
       await this.tgBot.telegram.sendMessage(
-          entry.key[1].toString(),
-          message,
+        entry.key[1].toString(),
+        message,
       );
     }
-  };
+  }
 }

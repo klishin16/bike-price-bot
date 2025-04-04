@@ -10,8 +10,11 @@ import db from "../database.ts";
 import { AvitoListing } from "./types.ts";
 import { BotHandler } from "../types.ts";
 import { Bot } from "../bot.ts";
+import { Logger } from "../common/logger.ts";
 
-export class AvitoHandler implements BotHandler {
+export class AvitoHandler extends BotHandler {
+  private logger = new Logger("AvitoHandler");
+
   public async handle(bot: Bot) {
     try {
       const html = await fetchAvitoPage(AVITO_SPECIALIZEDES_URL);
@@ -20,7 +23,6 @@ export class AvitoHandler implements BotHandler {
 
       const raw: string = await db.getValue(AVITO_DB_LISTINGS);
       const prevListings: AvitoListing[] = JSON.parse(raw) || [];
-      console.log("Prev listnings", prevListings.length);
       const prevListingsMap = new Map(
           prevListings.map((listing) => [listing.id, listing]),
       );
@@ -30,7 +32,7 @@ export class AvitoHandler implements BotHandler {
           newListings.push(listing);
         }
       });
-      console.log("NewListings", newListings.length);
+      this.logger.info(`Prev listnings: ${prevListings.length}, new listings: ${newListings.length}`);
       if (newListings.length) {
         await bot.notifySubscribers(`
              Новые объявления: \n

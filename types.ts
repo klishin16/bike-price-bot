@@ -11,6 +11,10 @@ export interface BikeData {
     webUrl: string;
 }
 
-export interface BotHandler {
-    handle: (bot: Bot) => unknown;
+export abstract class BotHandler {
+    public abstract handle(bot: Bot): unknown;
+
+    public getName() {
+        return this.constructor.name;
+    }
 }
