@@ -2,7 +2,6 @@ import { BikeInfo } from "../types.ts";
 import { BIKES } from "../constants.ts";
 import { getInfo } from "./api.ts";
 import db from "../database.ts";
-import { notifySubscribers } from "../server.ts";
 
 export const handleBikeinn = async () => {
     const requestsPromises: Promise<{

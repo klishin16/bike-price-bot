@@ -3,11 +3,22 @@ import { BIKES, DebugButtons, DebugButtonsKey, ExtraButtons, ExtraButtonsKey } f
 import { splitIntoPairs } from "./utils.ts";
 import config from "./config.ts";
 import { Markup, Telegraf } from "npm:telegraf";
-import { getInfo } from "./bikeinn/index.ts";
+import { avitoHanlder, getInfo } from "./bikeinn/index.ts";
 import { AVITO_SPECIALIZEDES_URL } from "./avito/index.ts";
 import { Logger } from "./common/logger.ts";
 
 const logger = new Logger();
+
+/** TODO */
+// export class Keyboard {
+//     constructor(private buttons: Record<string, string>) {}
+//
+//     public getTgKeyboard(): Markup.Markup<ReplyKeyboardMarkup> {
+//         return Markup.keyboard(
+//             splitIntoPairs(Object.keys(this.buttons)),
+//         ).resize();
+//     }
+// }
 
 export const getKeyboard = async (chatId: number) => {
     const isSubscribed = await db.isUserSubscribed(chatId);
@@ -122,7 +133,7 @@ export const botHandlerFactory = (bot: Telegraf) => {
                         break;
                     }
                     case "Avito count" : {
-                        const count = await handleAvito();
+                        const count = await avitoHanlder.getListingsCount();
                         ctx.reply(count?.toString() || 'Нет информации');
                         break;
                     }

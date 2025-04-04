@@ -1,10 +1,9 @@
 import {
-  AVITO_DB_COUNT_KEY,
   AVITO_DB_LISTINGS,
+  AVITO_DB_LISTINGS_COUNT,
   AVITO_SPECIALIZEDES_URL,
   fetchAvitoPage,
-  parseAvitoListings,
-  parseListingCount,
+  parseAvito,
 } from "./index.ts";
 import db from "../database.ts";
 import { AvitoListing } from "./types.ts";
@@ -18,8 +17,7 @@ export class AvitoHandler extends BotHandler {
   public async handle(bot: Bot) {
     try {
       const html = await fetchAvitoPage(AVITO_SPECIALIZEDES_URL);
-      const listingCount = parseListingCount(html);
-      const listings = parseAvitoListings(html);
+      const { listings, count } = parseAvito(html);
 
       const raw: string = await db.getValue(AVITO_DB_LISTINGS);
       const prevListings: AvitoListing[] = JSON.parse(raw) || [];
@@ -44,27 +42,19 @@ export class AvitoHandler extends BotHandler {
               newListings.map((listing) => `${listing.title}\n ${listing.link}`)
                 .join("\n")
             }`,
-          );  
+          );
         }
       }
       await db.setValue(AVITO_DB_LISTINGS, JSON.stringify(listings));
-
-      const prevListingCount = await db.getValue(AVITO_DB_COUNT_KEY);
-      if (!prevListingCount) {
-        await db.setValue(AVITO_DB_COUNT_KEY, listingCount);
-        return listingCount;
-      }
-
-      if (prevListingCount !== listingCount) {
-        await db.setValue(AVITO_DB_COUNT_KEY, listingCount);
-        await bot.notifySubscribers(
-          `Изменилось количество объявлений на Avito: ${listingCount}`,
-        );
-      }
-
-      return listingCount;
+      await db.setValue(AVITO_DB_LISTINGS_COUNT, count);
     } catch (error) {
       console.error("Avito module error:", error);
     }
   }
+
+  public getListingsCount() {
+    return db.getValue(AVITO_DB_LISTINGS_COUNT);
+  }
 }
+
+export const avitoHanlder = new AvitoHandler()

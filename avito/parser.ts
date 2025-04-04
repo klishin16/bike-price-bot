@@ -2,7 +2,7 @@ import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 import { AvitoListing } from "./types.ts";
 
 
-export function parseAvitoListings(html: string): AvitoListing[] {
+export function parseAvito(html: string): { count: number; listings: AvitoListing[] } {
     const $ = cheerio.load(html);
 
     const listings = $("div[itemtype*='http://schema.org/Product']").map((_, el) => {
@@ -13,13 +13,10 @@ export function parseAvitoListings(html: string): AvitoListing[] {
         return { id, title, price, link };
     }).get();
 
-    return listings;
-}
-
-export function parseListingCount(html: string) {
-    const $ = cheerio.load(html);
     const countText = $("[data-marker='page-title/count']").text().trim();
-    return countText ? parseInt(countText.replace(/\D/g, ""), 10) : 0;
+    const count = countText ? parseInt(countText.replace(/\D/g, ""), 10) : 0;
+
+    return { count, listings };
 }
 
 export function minimizeHtml(html: string) {
