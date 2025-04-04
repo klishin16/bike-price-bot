@@ -2,11 +2,12 @@ import { Logger } from "./common/logger.ts";
 import { BotHandler } from "./types.ts";
 import { avitoHanlder } from "./avito/index.ts";
 import { Bot } from "./bot.ts";
+import { bikeinnHanlder } from "./bikeinn/handler.ts";
 
 const logger = new Logger();
 
 /** Bot */
-const handlers: BotHandler[] = [avitoHanlder];
+const handlers: BotHandler[] = [avitoHanlder, bikeinnHanlder];
 const bot = new Bot(handlers);
 
 /** HTTP server */

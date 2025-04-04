@@ -4,7 +4,6 @@ import { PRICE_KEY } from "../constants.ts";
 export const getInfo = async (
     url: string,
 ): Promise<BikeInfo> => {
-    console.log(`Getting info for ${url}`);
     const response = await fetch(
         new Request(url, {
             headers: {
