@@ -4,9 +4,14 @@ import config from "./config.ts";
 import { botHandlerFactory, getKeyboard } from "./keyboards.ts";
 import { handleAvito } from "./avito/index.ts";
 import { handleBikeinn } from "./bikeinn/handler.ts";
+import { Logger } from "./common/logger.ts";
+
+
+const logger = new Logger();
 
 /** HTTP server */
-Deno.serve({ port: 3000 }, async (_req) => {
+const PORT = Number(Deno.env.get('PORT') || 3000)
+Deno.serve({ port: PORT }, async (_req) => {
   await handleBikeinn();
   await handleAvito();
 
@@ -42,7 +47,7 @@ export const notifySubscribers = async (message: string) => {
     prepareExtraButtonsHears();
     prepareDebugButtons();
 
-    bot.launch().then(() => console.log("Bot launched successfully"));
+    bot.launch().then(() => logger.info('Bot launched successfully'));
   } catch (error) {
     console.error("Error initializing bot:", error);
   }
