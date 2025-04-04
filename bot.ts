@@ -52,6 +52,7 @@ export class Bot {
   }
 
   public async notifySubscribers(message: string) {
+    this.logger.info('notifySubscribers')
     const entries = db.getSubscribedUsers();
     for await (const entry of entries) {
       await this.tgBot.telegram.sendMessage(

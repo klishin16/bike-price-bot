@@ -5,6 +5,9 @@ import config from "./config.ts";
 import { Markup, Telegraf } from "npm:telegraf";
 import { getInfo } from "./bikeinn/index.ts";
 import { AVITO_SPECIALIZEDES_URL } from "./avito/index.ts";
+import { Logger } from "./common/logger.ts";
+
+const logger = new Logger();
 
 export const getKeyboard = async (chatId: number) => {
     const isSubscribed = await db.isUserSubscribed(chatId);
@@ -58,6 +61,7 @@ export const botHandlerFactory = (bot: Telegraf) => {
             bot.hears(button, async (ctx) => {
                 switch (button as ExtraButtonsKey) {
                     case "Подписаться на изменения цены":
+                        logger.info('Подписка на изменения цены')
                         await db.setSubscribed(ctx.chat.id);
                         ctx.reply(
                             "Вы подписались на уведомления об изменения цены",
