@@ -15,6 +15,8 @@ export class AvitoHandler extends BotHandler {
   private logger = new Logger("AvitoHandler");
 
   public async handle(bot: Bot) {
+    this.logger.info('handle')
+
     try {
       const html = await fetchAvitoPage(AVITO_SPECIALIZEDES_URL);
       const { listings, count } = parseAvito(html);
