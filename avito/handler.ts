@@ -34,14 +34,18 @@ export class AvitoHandler extends BotHandler {
       });
       this.logger.info(`Prev listnings: ${prevListings.length}, new listings: ${newListings.length}`);
       if (newListings.length) {
-        await bot.notifySubscribers(`
+        if (newListings.length > 3) {
+          await bot.notifySubscribers(`${newListings.length} новых объявлений`);
+        } else {
+          await bot.notifySubscribers(`
              Новые объявления: \n
              ${
-            newListings.map((listing) => `${listing.title}\n ${listing.link}`).join(
-                "\n",
-            )
-        }
+              newListings.map((listing) => `${listing.title}\n ${listing.link}`).join(
+                  "\n",
+              )
+          }
             `);
+        }
       }
       await db.setValue(AVITO_DB_LISTINGS, JSON.stringify(listings));
 

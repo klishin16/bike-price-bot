@@ -1,6 +1,6 @@
 import { BikeKey, KVPrefix } from "./constants.ts";
 
-const kv = await Deno.openKv("db");
+const kv = await Deno.openKv();
 
 const getSubscribedUsers = () => {
   return kv.list({ prefix: [KVPrefix.NOTIFY_SUBSCRIPTION] });
